@@ -148,7 +148,23 @@ def create_model_card():
 
 def log_data_info(train_loader, test_loader):
     """Логирование информации о данных с тегами"""
-    data_path = os.path.abspath('./data')
+    data_path = os.path.abspath('./data').replace("\\", "/")
+
+    def format_indices(loader, label):
+        lines = [f"{label} indices:"]
+        for batch_idx, (data, target) in enumerate(loader):
+            start = batch_idx * loader.batch_size
+            end = start + len(data)
+            indices = list(range(start, end))
+            line = f"Batch {batch_idx:03d}: " + ", ".join(map(str, indices))
+            lines.append(line)
+        return "\n".join(lines)
+
+    indices_file_path = "data_indices.txt"
+    with open(indices_file_path, "w") as f:
+        f.write(format_indices(train_loader, "Train") + "\n\n")
+        f.write(format_indices(test_loader, "Test") + "\n")
+
     info_file = "dataset_info.txt"
 
     # Создаем файл с информацией
@@ -159,12 +175,14 @@ def log_data_info(train_loader, test_loader):
 
     # Логируем артефакты
     mlflow.log_artifact(info_file, "data_info")
+    mlflow.log_artifact(indices_file_path, "data_info")
     mlflow.log_artifact(data_path, "datasets")
 
     # Логируем пути как теги
     mlflow.set_tags({
         "dataset.path": data_path,
         "dataset.info_file": f"data_info/{info_file}",
+        "dataset.indices_file": f"data_info/{indices_file_path}"
     })
 
 
