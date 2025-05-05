@@ -176,7 +176,6 @@ def log_data_info(train_loader, test_loader):
         f.write(f"Data path: {data_path}")
 
     # Логируем артефакты
-    print('PUCKOV HAHAH', data_path)
     mlflow.log_artifact(info_file, "data_info")
     mlflow.log_artifacts(data_path, "datasets")
 
