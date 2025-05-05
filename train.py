@@ -1,6 +1,8 @@
 import torch
+import torch.nn as nn
 import mlflow
 import os
+import inspect
 import mlflow.data
 from model import Net, get_loaders, train, evaluate_model
 from mlflow.tracking import MlflowClient
@@ -16,17 +18,6 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def setup_mlflow():
     mlflow.set_tracking_uri("http://localhost:5000")
     mlflow.set_experiment("MNIST_Classification")
-
-
-def log_data_info(train_loader, test_loader):
-    """Логирование информации о данных"""
-    with open("dataset_info.txt", "w") as f:
-        f.write(f"Train dataset size: {len(train_loader.dataset)}\n")
-        f.write(f"Test dataset size: {len(test_loader.dataset)}\n")
-        f.write(f"Data saved in: {os.path.abspath('./data')}")
-
-    mlflow.log_artifact("dataset_info.txt", "data_info")
-    mlflow.log_artifact(os.path.abspath('./data'), "datasets")
 
 
 def train_model(train_loader):
@@ -80,28 +71,44 @@ def log_model_to_mlflow(model):
     )
 
 
-def add_model_registry_info():
+def add_model_registry_info(model):
     """Добавление информации в Model Registry"""
     client = MlflowClient()
     model_version = client.get_latest_versions("MNISTClassifier", stages=["None"])[0].version
 
-    # Обновление описания
+    # Извлечение архитектуры
+    layers = []
+    for name, module in model.named_modules():
+        if isinstance(module, nn.Linear):
+            layers.append(f"{module.in_features} → {module.out_features}")
+
+    num_layers = len(layers)
+
+    # Получаем имя файла
+    model_file_path = inspect.getfile(model.__class__)
+    model_file_name = os.path.basename(model_file_path)
+
+    # Формирование описания
+    description = f"""
+    Многослойный перцептрон для классификации MNIST
+    Архитектура:
+    - Входной слой: {layers[0]}
+    - Скрытый слой: {layers[1]}
+    - Выходной слой: {layers[2]}
+    Функции активации: ReLU для скрытых слоев, log_softmax для выходного слоя
+    Код модели: {model_file_name}
+    Параметры обучения:
+    - Batch size: {BATCH_SIZE}
+    - Learning rate: {LEARNING_RATE}
+    - Epochs: {EPOCHS}
+    Количество слоев: {num_layers}
+    """
+
+    # Обновление описания в Model Registry
     client.update_model_version(
         name="MNISTClassifier",
         version=model_version,
-        description="""
-        Многослойный перцептрон для классификации MNIST
-        Архитектура:
-        - Входной слой: 784 → 200
-        - Скрытый слой: 200 → 200
-        - Выходной слой: 200 → 10
-        Функции активации: ReLU
-        Код модели: model.py
-        Параметры обучения:
-        - Batch size: 256
-        - Learning rate: 0.1
-        - Epochs: 1
-        """
+        description=description.strip()
     )
 
     # Добавление тегов
@@ -112,7 +119,8 @@ def add_model_registry_info():
         "code_reference": "model.py",
         "input_shape": "1x28x28",
         "output_classes": "10",
-        "author": "Your Name"
+        "author": "Your Name",
+        "num_layers": str(num_layers)  # Добавляем количество слоев в теги
     }
 
     for key, value in tags.items():
@@ -123,8 +131,7 @@ def add_model_registry_info():
             value=value
         )
 
-
-    #Устанавливаем продакшн
+    # Перевод в продакшн
     client.transition_model_version_stage(
         name="MNISTClassifier",
         version=model_version,
@@ -147,6 +154,17 @@ def create_model_card():
 
 
 def log_data_info(train_loader, test_loader):
+    """Логирование информации о данных"""
+    with open("dataset_info.txt", "w") as f:
+        f.write(f"Train dataset size: {len(train_loader.dataset)}\n")
+        f.write(f"Test dataset size: {len(test_loader.dataset)}\n")
+        f.write(f"Data saved in: {os.path.abspath('./data')}")
+
+    mlflow.log_artifact("dataset_info.txt", "data_info")
+    mlflow.log_artifact(os.path.abspath('./data'), "datasets")
+
+
+def log_data_info(train_loader, test_loader):
     """Логирование информации о данных с тегами"""
     data_path = os.path.abspath('./data')
     info_file = "dataset_info.txt"
@@ -159,7 +177,7 @@ def log_data_info(train_loader, test_loader):
 
     # Логируем артефакты
     mlflow.log_artifact(info_file, "data_info")
-    mlflow.log_artifact(data_path, "datasets")
+    mlflow.log_artifacts(data_path, "datasets")
 
     # Логируем пути как теги
     mlflow.set_tags({
@@ -169,8 +187,9 @@ def log_data_info(train_loader, test_loader):
 
 
 def main():
+    print('hi')
     setup_mlflow()
-
+    print('Hi 1 ')
     with mlflow.start_run() as run:
         print("Текущий tracking URI:", mlflow.get_tracking_uri())
         print("URI артефактов:", mlflow.get_artifact_uri())
@@ -203,7 +222,7 @@ def main():
         log_model_to_mlflow(model)
 
         # Дополнительная информация в реестре
-        add_model_registry_info()
+        add_model_registry_info(model)
 
         # Документация
         create_model_card()
