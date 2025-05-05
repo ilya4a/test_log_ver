@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import mlflow
 import os
 import mlflow.data
@@ -132,19 +133,49 @@ def add_model_registry_info():
     )
 
 
-def create_model_card():
-    """Создание документации модели"""
+def create_model_card(model):
+    """Создание документации модели с автоматическим извлечением информации"""
     with open("model_card.md", "w") as f:
         f.write("# Model Card\n\n")
-        f.write("## Архитектура\n```python\n")
-        f.write(open("model.py").read())
-        f.write("\n```\n\n## Параметры\n")
+        f.write("## Model Architecture\n\n")
+        
+        # Извлекаем информацию о слоях
+        layers = []
+        for name, layer in model.named_children():
+            if isinstance(layer, nn.Linear):
+                layers.append({
+                    'name': name,
+                    'in_features': layer.in_features,
+                    'out_features': layer.out_features
+                })
+        
+        # Записываем информацию о слоях
+        f.write("### Layers\n")
+        f.write("| Layer Name | Input attributes | Output attributes |\n")
+        f.write("|------------|------------------|-------------------|\n")
+        for layer in layers:
+            f.write(f"| {layer['name'].center(10)} | {str(layer['in_features']).center(16)} | {str(layer['out_features']).center(17)} |\n")
+        
+        # Общая информация о модели
+        f.write("\n### Specifications\n")
+        f.write(f"- Number of layers: {len(layers)}\n")
+        f.write(f"- Total parameters: {sum(p.numel() for p in model.parameters())}\n")
+        f.write(f"- Trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}\n")
+        
+        # Параметры обучения
+        f.write("\n### Training parameters\n")
         f.write(f"- Batch size: {BATCH_SIZE}\n")
         f.write(f"- Learning rate: {LEARNING_RATE}\n")
         f.write(f"- Epochs: {EPOCHS}\n")
+        f.write(f"- The learning device: {DEVICE}\n")
+        
+        # Функции активации
+        f.write("\n### Activation functions\n")
+        f.write("- ReLU (for hidden layers)\n")
+        f.write("- LogSoftmax (for the output layer)\n")
 
+    # Логируем сгенерированную карточку модели
     mlflow.log_artifact("model_card.md", "documentation")
-
 
 def log_data_info(train_loader, test_loader):
     """Логирование информации о данных с тегами"""
@@ -206,7 +237,7 @@ def main():
         add_model_registry_info()
 
         # Документация
-        create_model_card()
+        create_model_card(model)
 
 
 if __name__ == "__main__":
