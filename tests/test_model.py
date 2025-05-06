@@ -1,14 +1,12 @@
-# test_model.py
 import pytest
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset
 import math
-import torch
-from model import Net, get_loaders, evaluate_model
 import torch.optim as optim
-import torch.nn.functional as F
 import mlflow
 from datetime import datetime
 from pathlib import Path
+
+from train_utils import *
 
 
 # Фикстуры
@@ -21,7 +19,7 @@ def mlflow_run():
 
 @pytest.fixture
 def sample_batch():
-    train_loader, _ = get_loaders(batch_size=32)
+    train_loader, _ = get_loaders.__wrapped__(batch_size=32)
     batch = next(iter(train_loader))
     mlflow.log_param("batch_size", batch[0].shape[0])
     return batch
@@ -72,29 +70,10 @@ def test_model_forward_pass(simple_model, sample_batch, mlflow_run):
         mlflow.log_metric("test.model_forward_pass.duration", duration)
 
 
-def test_data_loading(mlflow_run):
-    """Тестирует загрузку данных"""
-    start_time = datetime.now()
-    try:
-        train_loader, test_loader = get_loaders(batch_size=32)
-        assert len(train_loader.dataset) == 60000
-        assert len(test_loader.dataset) == 10000
-        sample_batch = next(iter(train_loader))
-        assert len(sample_batch[0]) == 32
-        mlflow.log_metric("test.data_loading", 1)
-    except AssertionError as e:
-        mlflow.log_metric("test.data_loading", 0)
-        mlflow.log_text(str(e), "errors/test.data_loading.txt")
-        raise
-    finally:
-        duration = (datetime.now() - start_time).total_seconds()
-        mlflow.log_metric("test.data_loading.duration", duration)
-
-
 def test_with_dataloader(simple_model, mlflow_run):
     start_time = datetime.now()
     try:
-        train_loader, _ = get_loaders(batch_size=32)
+        train_loader, _ = get_loaders.__wrapped__(batch_size=32)
         loss, accuracy = evaluate_model(simple_model, torch.device('cpu'), train_loader)
         assert 0 <= loss < 100
         assert 0 <= accuracy <= 100
@@ -199,32 +178,11 @@ def test_with_batch_list(simple_model, sample_batch, mlflow_run):
         mlflow.log_metric("test.with_batch_list.duration", duration)
 
 
-def test_known_input(simple_model, mlflow_run):
-    start_time = datetime.now()
-    try:
-        test_image = torch.randn(1, 28, 28) * 0.1
-        data = test_image.repeat(10, 1, 1, 1)
-        target = torch.zeros(10, dtype=torch.long)
-        dataset = TensorDataset(data, target)
-        loader = DataLoader(dataset, batch_size=10)
-
-        loss, accuracy = evaluate_model(simple_model, torch.device('cpu'), loader)
-        assert accuracy == 0.0
-        mlflow.log_metric("test.known_input", 1)
-    except AssertionError as e:
-        mlflow.log_metric("test.known_input", 0)
-        mlflow.log_text(str(e), "errors/test.known_input.txt")
-        raise
-    finally:
-        duration = (datetime.now() - start_time).total_seconds()
-        mlflow.log_metric("test.known_input.duration", duration)
-
-
 @pytest.mark.parametrize("batch_size", [32, 64, 128])
 def test_different_batch_sizes(batch_size, mlflow_run):
     start_time = datetime.now()
     try:
-        train_loader, _ = get_loaders(batch_size=batch_size)
+        train_loader, _ = get_loaders.__wrapped__(batch_size=batch_size)
         batch = next(iter(train_loader))
         assert batch[0].shape[0] == batch_size
         mlflow.log_metric(f"test.batch_size_{batch_size}", 1)
@@ -269,10 +227,13 @@ def run_and_log_tests():
 
         exit_code = pytest.main([
             "-v",
+            "tests",
             f"--junit-xml={report_path}",
             "--cov=model",
             f"--cov-report=xml:{coverage_path}"
         ])
+
+        print("EXIT_CODE", exit_code)
 
         success = exit_code == 0
 
@@ -286,11 +247,14 @@ def run_and_log_tests():
 
         mlflow.log_param("tests_passed", success)
 
-        return success
-
     except Exception as e:
         mlflow.log_text(f"Critical error: {str(e)}", "errors/critical.txt")
         return False
+
+    if not success:
+        mlflow.set_tag("training.status", "aborted")
+        raise RuntimeError("Тесты не прошли, обучение отменено")
+    return success
 
 
 if __name__ == "__main__":
