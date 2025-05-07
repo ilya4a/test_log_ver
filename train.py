@@ -2,8 +2,7 @@ from train_utils import *
 from log_test_ver import setup_mlflow
 import mlflow.data
 from tests.test_model import run_and_log_tests
-
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+from config import *
 
 
 def evaluate_and_log_metrics(model, train_loader, test_loader):

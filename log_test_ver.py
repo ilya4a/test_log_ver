@@ -4,13 +4,7 @@ from mlflow.tracking import MlflowClient
 import torch.nn as nn
 import inspect
 from functools import wraps
-
-from train_utils import *
-
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-BATCH_SIZE = 256
-LEARNING_RATE = 0.1
-EPOCHS = 1
+from config import *
 
 
 def setup_mlflow():
