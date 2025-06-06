@@ -1,7 +1,7 @@
 .coverage
 .idea/
 Worker.ipynb
-__pycache__/
+tests/__pycache__/
 coverage.xml
 data/
 data_indices.txt
