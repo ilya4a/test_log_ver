@@ -93,6 +93,10 @@
 
 Информацию о созданной модели можно посмотреть во вкладке Models в MLflow UI.
 
+![test_main](photos/test_main.png)
+![artifacts](photos/artifacts.png)
+![model](photos/model.png)
+
 ---
 
 ## Используемые библиотеки
