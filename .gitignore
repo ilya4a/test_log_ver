@@ -18,3 +18,4 @@ model_card.md
 *.pth
 *.ipynb
 .venv/
+*.pyc
